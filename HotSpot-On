@@ -1,0 +1,86 @@
+#!/bin/bash
+echo denyinterfaces wlan0 >> /etc/dhcpcd.conf
+> /etc/network/interfaces
+
+echo allow-hotplug wlan0 >> /etc/network/interfaces
+echo iface wlan0 inet static >> /etc/network/interfaces
+echo    address 192.168.10.1 >> /etc/network/interfaces
+echo    netmask 255.255.255.0 >> /etc/network/interfaces
+echo    network 192.168.10.0 >> /etc/network/interfaces
+echo    broadcast 192.168.10.255 >> /etc/network/interfaces
+
+sudo service dhcpcd restart
+
+sudo ifdown wlan0; sudo ifup wlan0
+
+> /etc/hostapd/hostapd.conf
+
+# This is the name of the WiFi interface we configured above
+echo interface=wlan0 >> /etc/hostapd/hostapd.conf
+
+# Use the nl80211 driver with the brcmfmac driver
+echo driver=nl80211 >> /etc/hostapd/hostapd.conf
+
+# This is the name of the network
+echo ssid=SCASDMOBILE1 >> /etc/hostapd/hostapd.conf
+
+# Use the 2.4GHz band
+echo hw_mode=g >> /etc/hostapd/hostapd.conf
+
+# Use channel 6
+echo channel=6 >> /etc/hostapd/hostapd.conf
+
+# Enable 802.11n
+echo ieee80211n=1 >> /etc/hostapd/hostapd.conf
+
+# Enable WMM
+# echo wmm_enabled=1 >> /etc/hostapd/hostapd.conf
+
+# Enable 40MHz channels with 20ns guard interval
+# echo ht_capab=[HT40][SHORT-GI-20][DSSS_CCK-40] >> /etc/hostapd/hostapd.conf
+
+# Accept all MAC addresses
+echo macaddr_acl=0 >> /etc/hostapd/hostapd.conf
+
+sudo /usr/sbin/hostapd /etc/hostapd/hostapd.conf
+
+# Use WPA authentication
+# auth_algs=1
+
+# Require clients to know the network name
+# ignore_broadcast_ssid=0
+
+# Use WPA2
+# wpa=2
+
+# Use a pre-shared key
+# wpa_key_mgmt=WPA-PSK
+
+# The network passphrase
+# wpa_passphrase=raspberry
+
+# Use AES, instead of TKIP
+# rsn_pairwise=CCMP
+
+> /etc/dnsmasq.conf
+
+echo interface=wlan0 >> /etc/dnsmasq.conf
+echo listen-address=192.168.10.1 >> /etc/dnsmasq.conf
+echo bind-interfaces >> /etc/dnsmasq.conf
+echo server=8.8.8.8 >> /etc/dnsmasq.conf
+echo domain-needed >> /etc/dnsmasq.conf
+echo bogus-priv >> /etc/dnsmasq.conf
+echo dhcp-range=192.168.10.5,192.168.10.200,12h >> /etc/dnsmasq.conf
+
+sudo iptables --flush
+
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE  
+sudo iptables -A FORWARD -i eth0 -o wlan0 -m state --state RELATED,ESTABLISHED -
+j ACCEPT  
+sudo iptables -A FORWARD -i wlan0 -o eth0 -j ACCEPT
+
+sudo sh -c "echo 1 > /proc/sys/net/ipv4/ip_forward"
+sudo sh -c "iptables-save > /etc/iptables.ipv4.nat"
+
+sudo service hostapd start
+sudo service dnsmasq start
